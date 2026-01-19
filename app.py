@@ -3,7 +3,7 @@ import google.generativeai as genai
 
 # 1. SETUP
 # This connects to the "Brain" using the key you will provide in Step 3
-api_key = st.secrets["AIzaSyBGGHpYggPJqQiod2-c7HJn_oY6HqAnFBU"] 
+api_key = st.secrets["GEMINI_API_KEY"]
 genai.configure(api_key=api_key)
 model = genai.GenerativeModel('gemini-1.5-flash')
 
