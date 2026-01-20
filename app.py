@@ -2,81 +2,81 @@ import streamlit as st
 import google.generativeai as genai
 
 # 1. SETUP
-# This connects to the "Brain" using the key you will provide in Step 3
-api_key = st.secrets["GEMINI_API_KEY"]
+api_key = st.secrets["GEMINI_API_KEY"] 
 genai.configure(api_key=api_key)
 model = genai.GenerativeModel('gemini-1.5-flash')
 
-# 2. THE PAGE LAYOUT
 st.set_page_config(page_title="AMC Clinical Exam Trainer", layout="wide")
-
 st.title("AMC Clinical Exam Simulation")
-st.markdown("---")
 
-# 3. INPUT THE CASE (You paste the AI generated case here)
-# In a real app, you could load these from a file.
+# 2. DEFINE THE CASE
+# (You can swap this text out for any topic later)
+if 'case_topic' not in st.session_state:
+    st.session_state.case_topic = "Fatigue in a Young Woman"
+
 col1, col2 = st.columns([1, 1])
 
 with col1:
-    st.header("1. Scenario & Tasks")
+    st.header("1. Scenario")
     st.info("""
-    **Setting:** General Practice
-    **Patient:** Sarah Jenkins, 28yo female
-    **Complaint:** Fatigue
+    **Patient:** Sarah, 28yo female.
+    **Setting:** General Practice.
+    **Complaint:** "Doctor, I'm just so tired all the time."
     """)
-    
-    st.write("**Tasks:**")
-    st.write("i. Take a focused history.")
-    st.write("ii. Explain the likely diagnosis.")
-    st.write("iii. Counsel on management.")
-
-    st.markdown("---")
-    st.subheader("3. Reference Dialogue")
-    with st.expander("View Sample Doctor/Patient Interaction"):
-        st.write("""
-        **Dr:** "Hello Sarah, I see you're feeling tired. Tell me more about that?"
-        **Pt:** "It's been months..."
-        *(Paste the AI generated dialogue here)*
-        """)
-
-# 4. THE INTERACTIVE PART
-with col2:
-    st.header("4. Perform Your Tasks")
-    
-    # Task 1 Recorder
-    st.subheader("Task i: History Taking")
-    user_input_1 = st.text_area("Type what you would say (or use Dictation on your phone):", key="task1")
-    
-    # Task 2 Recorder
-    st.subheader("Task ii & iii: Diagnosis & Management")
-    user_input_2 = st.text_area("Type your explanation:", key="task2")
-
-    if st.button("Submit for Assessment"):
-        if user_input_1 or user_input_2:
-            with st.spinner('Analyzing your response against AMC Rubrics...'):
-                # This sends your answer to the AI to be graded
-                prompt = f"""
-                You are an AMC Examiner. 
-                Task 1 Answer: {user_input_1}
-                Task 2 Answer: {user_input_2}
-                
-                Critique this student based on Australian Medical Council standards. 
-                Be strict. Did they ask open-ended questions? Did they show empathy?
-                """
-                response = model.generate_content(prompt)
-                st.success("Analysis Complete")
-                st.write(response.text)
-        else:
-            st.warning("Please enter your response first.")
-
-# 5. THE HIDDEN RUBRIC
-st.markdown("---")
-with st.expander("Click to Reveal Official Rubric & Answer"):
-    st.error("Only open this AFTER you have attempted the case!")
+    st.markdown("### Tasks")
     st.markdown("""
-    **Critical Errors:**
-    * Failure to ask about pregnancy.
-    * Failure to assess for depression.
-    
-    **Correct Diagnosis:** Iron Deficiency Anemia secondary to menorrhagia.
+    1.  **History:** Explore the presenting complaint.
+    2.  **Diagnosis:** Explain what you think is wrong.
+    3.  **Management:** Counsel the patient on the next steps.
+    """)
+
+# 3. THE AUDIO INTERACTION
+with col2:
+    st.header("2. Perform Task (Audio)")
+    st.write("Click the microphone to record your response for **Task 1 (History)**.")
+
+    # This creates the built-in audio recorder
+    audio_value = st.audio_input("Record your answer")
+
+    if audio_value:
+        st.audio(audio_value) # Playback for the student to hear themselves
+
+        if st.button("Grade My Audio"):
+            with st.spinner('AI is listening and grading...'):
+                try:
+                    # We send the raw audio data directly to Gemini
+                    audio_bytes = audio_value.read()
+                    
+                    prompt = """
+                    You are a strict examiner for the Australian Medical Council (AMC) exam. 
+                    Listen to the student's audio response. 
+                    
+                    Provide feedback in this format:
+                    1. **Communication Style:** (Was it empathetic? clear?)
+                    2. **Missing Questions:** (What critical questions did they fail to ask?)
+                    3. **Pass/Fail:** (Give a verdict)
+                    """
+
+                    response = model.generate_content([
+                        prompt,
+                        {
+                            "mime_type": "audio/wav",
+                            "data": audio_bytes
+                        }
+                    ])
+                    
+                    st.success("Grading Complete")
+                    st.write(response.text)
+                    
+                except Exception as e:
+                    st.error(f"An error occurred: {e}")
+
+# 4. RUBRIC (Hidden)
+st.markdown("---")
+with st.expander("Show Official Answer Key"):
+    st.warning("Don't peek until you try!")
+    st.markdown("""
+    * **Must Ask:** Menstrual history (heavy periods?), Diet (vegetarian?), Family history of anemia.
+    * **Red Flags:** Weight loss, night sweats.
+    * **Diagnosis:** Iron Deficiency Anemia.
     """)
