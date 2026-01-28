@@ -1,82 +1,94 @@
 import streamlit as st
 import google.generativeai as genai
 
-# 1. SETUP
-api_key = st.secrets["GEMINI_API_KEY"] 
-genai.configure(api_key=api_key)
-model = genai.GenerativeModel('gemini-1.5-flash')
+# ==========================================
+# 1. EDIT THIS SECTION ONLY (PASTE YOUR NEW TOPIC HERE)
+# ==========================================
 
-st.set_page_config(page_title="AMC Clinical Exam Trainer", layout="wide")
+TOPIC_SCENARIO = """
+**Patient:** Sarah, 28yo female
+**Setting:** GP Clinic
+**Complaint:** Fatigue
+"""
+
+TOPIC_TASKS = """
+1. Take a focused history.
+2. Explain the likely diagnosis.
+3. Counsel on management.
+"""
+
+TOPIC_RUBRIC = """
+**Correct Diagnosis:** Iron Deficiency Anemia.
+**Critical Error:** Failing to ask about heavy periods or diet.
+**Key Points:**
+* Identify microcytic anemia features.
+* Ask about vegetarianism.
+"""
+
+# ==========================================
+# 2. DO NOT TOUCH THE CODE BELOW
+# ==========================================
+
+# A. Setup Google AI
+try:
+    api_key = st.secrets["GEMINI_API_KEY"] 
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel('gemini-1.5-flash')
+except Exception as e:
+    st.error("Error: API Key is missing. Please set it in Streamlit Secrets.")
+
+# B. Page Setup
+st.set_page_config(page_title="AMC Clinical Exam", layout="wide")
 st.title("AMC Clinical Exam Simulation")
-
-# 2. DEFINE THE CASE
-# (You can swap this text out for any topic later)
-if 'case_topic' not in st.session_state:
-    st.session_state.case_topic = "Fatigue in a Young Woman"
+st.markdown("---")
 
 col1, col2 = st.columns([1, 1])
 
+# C. Left Column: The Case
 with col1:
     st.header("1. Scenario")
-    st.info("""
-    **Patient:** Sarah, 28yo female.
-    **Setting:** General Practice.
-    **Complaint:** "Doctor, I'm just so tired all the time."
-    """)
-    st.markdown("### Tasks")
-    st.markdown("""
-    1.  **History:** Explore the presenting complaint.
-    2.  **Diagnosis:** Explain what you think is wrong.
-    3.  **Management:** Counsel the patient on the next steps.
-    """)
+    st.info(TOPIC_SCENARIO)  
+    
+    st.subheader("Tasks")
+    st.markdown(TOPIC_TASKS) 
 
-# 3. THE AUDIO INTERACTION
+# D. Right Column: Audio Recorder & Grading
 with col2:
     st.header("2. Perform Task (Audio)")
-    st.write("Click the microphone to record your response for **Task 1 (History)**.")
-
-    # This creates the built-in audio recorder
+    st.write("Record your answer to the tasks on the left.")
+    
+    # The Audio Input
     audio_value = st.audio_input("Record your answer")
 
     if audio_value:
-        st.audio(audio_value) # Playback for the student to hear themselves
-
+        st.audio(audio_value)
         if st.button("Grade My Audio"):
-            with st.spinner('AI is listening and grading...'):
+            with st.spinner('AI is analyzing your voice...'):
                 try:
-                    # We send the raw audio data directly to Gemini
-                    audio_bytes = audio_value.read()
+                    prompt = f"""
+                    You are an AMC Examiner.
+                    Case Scenario: {TOPIC_SCENARIO}
+                    Tasks: {TOPIC_TASKS}
+                    Official Answer Key: {TOPIC_RUBRIC}
                     
-                    prompt = """
-                    You are a strict examiner for the Australian Medical Council (AMC) exam. 
-                    Listen to the student's audio response. 
-                    
-                    Provide feedback in this format:
-                    1. **Communication Style:** (Was it empathetic? clear?)
-                    2. **Missing Questions:** (What critical questions did they fail to ask?)
-                    3. **Pass/Fail:** (Give a verdict)
+                    INSTRUCTIONS:
+                    Listen to the student's audio.
+                    1. Did they cover the critical points in the Answer Key?
+                    2. Did they make any critical errors?
+                    3. Give a PASS or FAIL verdict.
                     """
-
-                    response = model.generate_content([
-                        prompt,
-                        {
-                            "mime_type": "audio/wav",
-                            "data": audio_bytes
-                        }
-                    ])
-                    
+                    response = model.generate_content([prompt, {"mime_type": "audio/wav", "data": audio_value.read()}])
                     st.success("Grading Complete")
                     st.write(response.text)
-                    
                 except Exception as e:
-                    st.error(f"An error occurred: {e}")
+                    st.error(f"Error grading audio: {e}")
 
-# 4. RUBRIC (Hidden)
+# E. The Hidden Rubric (Clickable Reveal)
 st.markdown("---")
-with st.expander("Show Official Answer Key"):
-    st.warning("Don't peek until you try!")
-    st.markdown("""
-    * **Must Ask:** Menstrual history (heavy periods?), Diet (vegetarian?), Family history of anemia.
-    * **Red Flags:** Weight loss, night sweats.
-    * **Diagnosis:** Iron Deficiency Anemia.
-    """)
+st.write("### Review")
+
+# This 'st.expander' line creates the hidden clickable box
+with st.expander("👁️ Click to Reveal Official Rubric & Answer"):
+    st.markdown("### Official Examiner Guide")
+    st.markdown(TOPIC_RUBRIC)
+    st.info("Tip: Compare this rubric with the AI feedback above to see where you can improve.")
