@@ -1,5 +1,7 @@
 import streamlit as st
 import google.generativeai as genai
+import whisper
+import tempfile
 import os
 
 # ==========================================
@@ -33,29 +35,39 @@ TOPIC_RUBRIC = """
 * **Inspection:** Full Claw Hand (all fingers curled), patient holds arm still.
 * **Motor:** Patient refuses active movement due to pain.
 * **Sensory:** Numbness in Little Finger (C8) AND Inner Elbow (T1). Normal sensation in Thumb (C6) and Middle Finger (C7).
+
+**PATIENT SCRIPT (Mental Model):**
+* **Opening Statement:** "I tried to grab a branch to stop myself falling, and it nearly ripped my arm off. Now my hand feels dead and tingly."
+* **Reaction:** If doctor tries to force movement, James cries out and pulls away.
 """
 
 # ==========================================
 # 2. DO NOT TOUCH THE CODE BELOW
 # ==========================================
 
-# A. Setup Google Gemini
+# A. Setup Google Gemini (TEXT ONLY – CORRECT)
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=api_key)
-    # Using gemini-1.5-flash as it supports native audio processing
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    model = genai.GenerativeModel("models/gemini-1.0-pro")
 except Exception as e:
     st.error(f"Gemini setup error: {e}")
 
-# B. Page Setup
+# B. Load Whisper model ONCE (cached)
+@st.cache_resource
+def load_whisper():
+    return whisper.load_model("base")
+
+whisper_model = load_whisper()
+
+# C. Page Setup
 st.set_page_config(page_title="AMC Clinical Exam", layout="wide")
 st.title("AMC Clinical Exam Simulation")
 st.markdown("---")
 
 col1, col2 = st.columns([1, 1])
 
-# C. Left Column: Scenario
+# D. Left Column: Scenario
 with col1:
     st.header("1. Scenario")
     st.info(TOPIC_SCENARIO)
@@ -63,7 +75,7 @@ with col1:
     st.subheader("Tasks")
     st.markdown(TOPIC_TASKS)
 
-# D. Right Column: Audio + Grading
+# E. Right Column: Audio + Grading
 with col2:
     st.header("2. Perform Task (Audio)")
     st.write("Record your answer to the tasks on the left.")
@@ -73,67 +85,57 @@ with col2:
     if audio_value:
         st.audio(audio_value)
 
-        if st.button("Grade My Performance"):
+        if st.button("Transcribe & Grade My Audio"):
             try:
-                # Step: Gemini Evaluation (Audio-to-Text + Grading)
-                with st.spinner("👨‍⚕️ Examiner is listening and grading..."):
-                    
-                    examiner_prompt = f"""
-You are an Australian Medical Council (AMC) Clinical Examiner.
-You must grade STRICTLY using the provided rubric.
-Do NOT be lenient. 
+                # Save audio to temp file
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
+                    tmp.write(audio_value.read())
+                    audio_path = tmp.name
 
-First, transcribe the student's audio. Then, evaluate them based on the transcript.
+                # Step 1: Transcription
+                with st.spinner("📝 Transcribing audio..."):
+                    transcription = whisper_model.transcribe(audio_path)
+                    transcript = transcription["text"]
 
-========================
-CASE INFORMATION
-========================
-SCENARIO: {TOPIC_SCENARIO}
-TASKS: {TOPIC_TASKS}
-OFFICIAL EXAMINER RUBRIC: {TOPIC_RUBRIC}
+                st.markdown("### 📝 Audio Transcript")
+                st.write(transcript)
 
-========================
-MARKING INSTRUCTIONS
-========================
-STEP 1: RUBRIC COMPARISON
-Compare the student's performance AGAINST EACH of the following:
-- SAFETY: Did they force movement?
-- CLINICAL: Did they identify C8 and T1 loss?
-- DIAGNOSIS: Did they correctly identify Lower Brachial Plexus Injury?
+                # Step 2: Gemini Evaluation
+                with st.spinner("👨‍⚕️ Examiner is grading..."):
+                    response = model.generate_content(f"""
+You are an expert AMC Examiner.
 
-STEP 2: FINAL VERDICT
-- If ANY critical error occurred (forced movement, wrong diagnosis, missed T1) -> FAIL
-- Otherwise -> PASS
+--- CASE DATA ---
+SCENARIO:
+{TOPIC_SCENARIO}
 
-========================
-OUTPUT FORMAT (MANDATORY)
-========================
-### 📝 Transcription
-(Provide the full text of what the student said)
+TASKS:
+{TOPIC_TASKS}
 
-### 📊 Rubric Analysis
-(Point by point breakdown)
+RUBRIC:
+{TOPIC_RUBRIC}
 
-### 🚨 Critical Errors
-(Explicitly list them or state "None")
+--- STUDENT TRANSCRIPT ---
+{transcript}
 
-### ✅ Final Verdict
-PASS or FAIL
-"""
-                    # Sending audio data directly to Gemini
-                    audio_data = audio_value.read()
-                    response = model.generate_content([
-                        examiner_prompt,
-                        {"mime_type": "audio/wav", "data": audio_data}
-                    ])
+--- INSTRUCTIONS ---
+1. Identify any CRITICAL ERRORS.
+2. Comment on Safety, Clinical Examination, and Diagnosis.
+3. Give a final verdict: PASS or FAIL.
 
-                    st.markdown("### 👨‍⚕️ Examiner Feedback")
-                    st.write(response.text)
+Use AMC examiner tone.
+""")
+
+                st.markdown("### 👨‍⚕️ Examiner Feedback")
+                st.write(response.text)
+
+                # Cleanup
+                os.remove(audio_path)
 
             except Exception as e:
                 st.error(f"Error processing audio: {e}")
 
-# E. Hidden Rubric
+# F. Hidden Rubric
 st.markdown("---")
 st.write("### Review")
 
