@@ -47,9 +47,9 @@ try:
     api_key = st.secrets["GEMINI_API_KEY"] 
     genai.configure(api_key=api_key)
     # This line is now simplified to prevent the "Unknown field" error
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('models/gemini-1.5-flash')
 except Exception as e:
-    st.error("Error: API Key is missing. Please set it in Streamlit Secrets.")
+    st.error(f"Error: {e}")
 
 # B. Page Setup
 st.set_page_config(page_title="AMC Clinical Exam", layout="wide")
