@@ -102,9 +102,8 @@ with col2:
 
                 # Step 2: Gemini Evaluation
                 with st.spinner("👨‍⚕️ Examiner is grading..."):
-                    response = model.generate_content(f"""
-You are an expert AMC Examiner.
-response = model.generate_content(f"""
+                    response = model.examiner_prompt = f"""
+
 You are an Australian Medical Council (AMC) Clinical Examiner.
 You must grade STRICTLY using the provided rubric.
 Do NOT be lenient.
@@ -132,28 +131,28 @@ STUDENT TRANSCRIPT
 MARKING INSTRUCTIONS
 ========================
 
-STEP 1: RUBRIC COMPARISON  
-Compare the student's transcript AGAINST EACH of the following:
+STEP 1: RUBRIC COMPARISON
+Compare the student transcript AGAINST EACH of the following:
 
-A. SAFETY  
+A. SAFETY
 - Did the student attempt or suggest forcing movement despite pain? (YES/NO)
 
-B. CLINICAL EXAMINATION  
+B. CLINICAL EXAMINATION
 - Did the student inspect the hand appropriately? (YES/NO)
 - Did the student assess motor function appropriately, respecting pain? (YES/NO)
 - Did the student identify BOTH C8 (little finger) AND T1 (inner elbow) sensory loss? (YES/NO)
 
-C. DIAGNOSIS  
+C. DIAGNOSIS
 - Did the student correctly diagnose Lower Brachial Plexus Injury / Klumpke’s Palsy? (YES/NO)
 - Did the student explain C8/T1 involvement? (YES/NO)
 
-STEP 2: CRITICAL ERROR CHECK  
+STEP 2: CRITICAL ERROR CHECK
 If ANY of the following occurred, the candidate MUST FAIL:
 - Forced passive movement
 - Incorrect diagnosis (e.g. ulnar nerve palsy)
 - Failure to assess T1 dermatome
 
-STEP 3: FINAL VERDICT  
+STEP 3: FINAL VERDICT
 - If ANY critical error occurred → FAIL
 - Otherwise → PASS
 
@@ -167,14 +166,17 @@ OUTPUT FORMAT (MANDATORY)
 - Diagnosis: YES/NO (with justification)
 
 ### 🚨 Critical Errors
-- List any critical errors explicitly (or state “None”)
+- List any critical errors explicitly (or state "None")
 
 ### 👨‍⚕️ Examiner Feedback
 - Brief, direct AMC-style feedback (no encouragement)
 
 ### ✅ Final Verdict
 PASS or FAIL
-""")
+"""
+
+response = model.generate_content(examiner_prompt)
+
 
 
                 st.markdown("### 👨‍⚕️ Examiner Feedback")
