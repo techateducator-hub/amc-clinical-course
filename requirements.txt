@@ -1,2 +1,5 @@
-streamlit>=1.40.0
+streamlit
 google-generativeai
+openai-whisper
+torch
+ffmpeg-python
