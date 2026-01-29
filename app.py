@@ -1,5 +1,8 @@
 import streamlit as st
 import google.generativeai as genai
+import whisper
+import tempfile
+import os
 
 # ==========================================
 # 1. EDIT THIS SECTION ONLY (YOUR CONTENT)
@@ -42,77 +45,97 @@ TOPIC_RUBRIC = """
 # 2. DO NOT TOUCH THE CODE BELOW
 # ==========================================
 
-# A. Setup Google AI (Simplified to avoid errors)
+# A. Setup Google Gemini (TEXT ONLY – CORRECT)
 try:
-    api_key = st.secrets["GEMINI_API_KEY"] 
+    api_key = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=api_key)
-    # This line is now simplified to prevent the "Unknown field" error
-    model = genai.GenerativeModel('models/gemini-1.0-pro-vision')
+    model = genai.GenerativeModel("models/gemini-1.0-pro")
 except Exception as e:
-    st.error(f"Error: {e}")
+    st.error(f"Gemini setup error: {e}")
 
-# B. Page Setup
+# B. Load Whisper model ONCE (cached)
+@st.cache_resource
+def load_whisper():
+    return whisper.load_model("base")
+
+whisper_model = load_whisper()
+
+# C. Page Setup
 st.set_page_config(page_title="AMC Clinical Exam", layout="wide")
 st.title("AMC Clinical Exam Simulation")
 st.markdown("---")
 
 col1, col2 = st.columns([1, 1])
 
-# C. Left Column: The Case
+# D. Left Column: Scenario
 with col1:
     st.header("1. Scenario")
-    st.info(TOPIC_SCENARIO)  
-    
-    st.subheader("Tasks")
-    st.markdown(TOPIC_TASKS) 
+    st.info(TOPIC_SCENARIO)
 
-# D. Right Column: Audio Recorder & Grading
+    st.subheader("Tasks")
+    st.markdown(TOPIC_TASKS)
+
+# E. Right Column: Audio + Grading
 with col2:
     st.header("2. Perform Task (Audio)")
     st.write("Record your answer to the tasks on the left.")
-    
+
     audio_value = st.audio_input("Record your answer")
 
     if audio_value:
         st.audio(audio_value)
-        if st.button("Transcribe & Grade My Audio"):
-            with st.spinner('AI is transcribing and analyzing...'):
-                try:
-                    prompt = f"""
-                    You are an expert AMC Examiner.
-                    
-                    --- CASE DATA ---
-                    SCENARIO: {TOPIC_SCENARIO}
-                    TASKS: {TOPIC_TASKS}
-                    RUBRIC/ANSWER KEY: {TOPIC_RUBRIC}
-                    
-                    --- INSTRUCTIONS ---
-                    Listen to the student's audio recording.
-                    
-                    STEP 1: TRANSCRIPT
-                    Write down a verbatim transcript of what the student said.
-                    Label this section "### 📝 Audio Transcript".
-                    
-                    STEP 2: EVALUATION
-                    Compare the transcript against the Rubric.
-                    1. **Safety:** Did they force movement despite James's pain?
-                    2. **Clinical:** Did they find the C8/T1 sensory loss?
-                    3. **Diagnosis:** Did they identify Klumpke's Palsy?
-                    Label this section "### 👨‍⚕️ Examiner Feedback".
-                    
-                    STEP 3: VERDICT
-                    Give a final PASS or FAIL.
-                    """
-                    
-                    response = model.generate_content([
-                        prompt, 
-                        {"mime_type": "audio/wav", "data": audio_value.read()}
-                    ])
-                    st.write(response.text)
-                except Exception as e:
-                    st.error(f"Error processing audio: {e}")
 
-# E. The Hidden Rubric (Clickable Reveal)
+        if st.button("Transcribe & Grade My Audio"):
+            try:
+                # Save audio to temp file
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
+                    tmp.write(audio_value.read())
+                    audio_path = tmp.name
+
+                # Step 1: Transcription
+                with st.spinner("📝 Transcribing audio..."):
+                    transcription = whisper_model.transcribe(audio_path)
+                    transcript = transcription["text"]
+
+                st.markdown("### 📝 Audio Transcript")
+                st.write(transcript)
+
+                # Step 2: Gemini Evaluation
+                with st.spinner("👨‍⚕️ Examiner is grading..."):
+                    response = model.generate_content(f"""
+You are an expert AMC Examiner.
+
+--- CASE DATA ---
+SCENARIO:
+{TOPIC_SCENARIO}
+
+TASKS:
+{TOPIC_TASKS}
+
+RUBRIC:
+{TOPIC_RUBRIC}
+
+--- STUDENT TRANSCRIPT ---
+{transcript}
+
+--- INSTRUCTIONS ---
+1. Identify any CRITICAL ERRORS.
+2. Comment on Safety, Clinical Examination, and Diagnosis.
+3. Give a final verdict: PASS or FAIL.
+
+Use AMC examiner tone.
+""")
+
+                st.markdown("### 👨‍⚕️ Examiner Feedback")
+                st.write(response.text)
+
+                # Cleanup
+                os.remove(audio_path)
+
+            except Exception as e:
+                st.error(f"Error processing audio: {e}")
+
+# F. Hidden Rubric
 st.markdown("---")
 st.write("### Review")
 
