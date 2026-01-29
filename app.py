@@ -33,21 +33,21 @@ TOPIC_RUBRIC = """
 * **Motor:** Patient refuses active movement due to pain.
 * **Sensory:** Numbness in Little Finger (C8) AND Inner Elbow (T1). Normal sensation in Thumb (C6) and Middle Finger (C7).
 
-**PATIENT SCRIPT (How the patient acted):**
-* **Attitude:** In pain, guarding the arm.
-* **Reaction:** If doctor tries to force movement, patient cries out and pulls away.
-* **History:** "I grabbed a branch to stop falling and it yanked my arm." (Hyper-abduction mechanism).
+**PATIENT SCRIPT (Mental Model):**
+* **Opening Statement:** "I tried to grab a branch to stop myself falling, and it nearly ripped my arm off. Now my hand feels dead and tingly."
+* **Reaction:** If doctor tries to force movement, James cries out and pulls away.
 """
 
 # ==========================================
 # 2. DO NOT TOUCH THE CODE BELOW
 # ==========================================
 
-# A. Setup Google AI
+# A. Setup Google AI (Simplified to avoid errors)
 try:
     api_key = st.secrets["GEMINI_API_KEY"] 
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-1.5-flash', generation_config={"typical_p": 0.95})
+    # This line is now simplified to prevent the "Unknown field" error
+    model = genai.GenerativeModel('gemini-1.5-flash')
 except Exception as e:
     st.error("Error: API Key is missing. Please set it in Streamlit Secrets.")
 
@@ -71,7 +71,6 @@ with col2:
     st.header("2. Perform Task (Audio)")
     st.write("Record your answer to the tasks on the left.")
     
-    # The Audio Input
     audio_value = st.audio_input("Record your answer")
 
     if audio_value:
@@ -79,7 +78,6 @@ with col2:
         if st.button("Transcribe & Grade My Audio"):
             with st.spinner('AI is transcribing and analyzing...'):
                 try:
-                    # We send the SCENARIO + TASKS + RUBRIC (Context) to the AI
                     prompt = f"""
                     You are an expert AMC Examiner.
                     
@@ -92,13 +90,13 @@ with col2:
                     Listen to the student's audio recording.
                     
                     STEP 1: TRANSCRIPT
-                    Write down a verbatim transcript of exactly what the student said.
+                    Write down a verbatim transcript of what the student said.
                     Label this section "### 📝 Audio Transcript".
                     
                     STEP 2: EVALUATION
                     Compare the transcript against the Rubric.
-                    1. **Safety Check:** Did they force movement?
-                    2. **Clinical Check:** Did they find the C8/T1 sensory loss?
+                    1. **Safety:** Did they force movement despite James's pain?
+                    2. **Clinical:** Did they find the C8/T1 sensory loss?
                     3. **Diagnosis:** Did they identify Klumpke's Palsy?
                     Label this section "### 👨‍⚕️ Examiner Feedback".
                     
@@ -108,10 +106,7 @@ with col2:
                     
                     response = model.generate_content([
                         prompt, 
-                        {
-                            "mime_type": "audio/wav", 
-                            "data": audio_value.read()
-                        }
+                        {"mime_type": "audio/wav", "data": audio_value.read()}
                     ])
                     st.write(response.text)
                 except Exception as e:
@@ -121,7 +116,6 @@ with col2:
 st.markdown("---")
 st.write("### Review")
 
-# This 'st.expander' line creates the hidden clickable box
 with st.expander("👁️ Click to Reveal Official Rubric & Diagnosis"):
     st.markdown("### Official Examiner Guide")
     st.markdown(TOPIC_RUBRIC)
